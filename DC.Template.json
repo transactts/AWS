@@ -1,0 +1,241 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "CloudFormation template to launch AD DCs and build initial domain",
+    "Parameters": {
+        "AMI": {
+          "Description": "AMI ID",
+          "Type": "AWS::EC2::Image::Id",
+          "Default": "ami-ce7373d3"
+        },
+        "Subnet1": {
+          "Type": "AWS::EC2::Subnet::Id",
+          "Default": "subnet-dae3bebf",
+          "Description": "The SubnetId where the DC 1 will be launched"
+        },
+        "DC1PrivateIP": {
+          "Description": "The private IP address to be assigned to primary DC (required).",
+          "Type": "String",
+          "Default": ""
+        },
+        "Subnet2": {
+          "Type": "AWS::EC2::Subnet::Id",
+          "Default": "subnet-d7d89da0",
+          "Description": "The SubnetId where the cluster node 2 will be launched"
+        },
+        "DC2PrivateIP": {
+          "Description": "The private IP address to be assigned to the secondary DC (required).",
+          "Type": "String",
+          "Default": ""
+        },
+        "SecurityGroups": {
+            "Type": "List<AWS::EC2::SecurityGroup::Id>",
+            "Default": "sg-7b54821f",
+            "Description": "The security groups allowed to access these servers"
+        },
+        "LocalAdministratorPassword": {
+            "NoEcho": "true",
+            "Description": "Password to reset local administrator to.",
+            "Type": "String",
+            "Default": "A123456789!"
+        },
+        "InstanceType": {
+            "Description": "Type of EC2 instance to launch.",
+            "Type": "String",
+            "Default": "t2.micro",
+            "AllowedValues": [
+                "t2.micro",
+                "t2.small",
+                "t2.medium",
+                "t2.large",
+                "m4.large",
+                "m4.xlarge",
+                "m4.2xlarge",
+                "m4.4xlarge",
+                "m3.medium",
+                "m3.large",
+                "m3.xlarge",
+                "m3.2xlarge",
+                "c1.xlarge"
+            ],
+            "ConstraintDescription": "must be a valid EC2 instance type."
+        },
+        "Environment": {
+          "Description": "Type of environment to launch.",
+          "Type": "String",
+          "Default": "DEV",
+          "AllowedValues": [
+              "DEV",
+              "STAGE",
+              "LIVE",
+              "INFRA"
+          ],
+          "ConstraintDescription": "must be a valid Environment instance type."
+        },
+        "Country": {
+            "Description": "Country code for stack.",
+            "Type": "String"
+        },
+        "KeyName": {
+            "Description": "The EC2 Key Pair to allow Remote Desktop access or SSH to the instances.",
+            "Type": "AWS::EC2::KeyPair::KeyName",
+            "Default": "EC2Connect"
+        }
+    },
+    "Mappings": {
+      "EnvironmentToCode": {
+        "DEV": { "Value": "DV" },
+        "STAGE": { "Value": "ST" },
+        "LIVE": { "Value": "PR" },
+        "INFRA": { "Value": "INF" }
+      }
+    },
+    "Conditions": {
+      "DC1UnspecifiedPrivateIP": { "Fn::Equals": [ { "Ref": "DC1PrivateIP" }, "" ] },
+      "DC2UnspecifiedPrivateIP": { "Fn::Equals": [ { "Ref": "DC2PrivateIP" }, "" ] }
+    },
+    "Resources": {
+        "DC1": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "ImageId": {
+                  "Ref": "AMI"
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "NetworkInterfaces": [
+                    {
+                        "DeviceIndex": "0",
+                        "DeleteOnTermination": "true",
+                        "SubnetId": {
+                            "Ref": "Subnet1"
+                        },
+                        "PrivateIpAddress": {  "Fn::If": [ "DC1UnspecifiedPrivateIP", { "Ref" : "AWS::NoValue" }, { "Ref": "DC1PrivateIP" } ] },
+                        "GroupSet":  { "Ref" : "SecurityGroups" }
+                    }
+                ],
+                "IamInstanceProfile": "Software",
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "",
+                            [
+                              "# Version: 1.0\n",
+                              "<powershell>Set-ExecutionPolicy \"remotesigned\" -force", "\n",
+                              "Import-Module \"C:\\Program Files (x86)\\AWS Tools\\PowerShell\\AWSPowerShell\\AWSPowerShell.psd1\"", "\n",
+                              "Initialize-AWSDefaults -Region eu-central-1", "\n",
+                              "if((Test-Path \"C:\\Assets\") -ne $true) {", "\n",
+                              "   New-Item -Path \"C:\\Assets\" -ItemType \"directory\"", "\n",
+                              "}", "\n",
+                              "Copy-S3Object -Region eu-west-1 -SourceBucket tom-filerepo-pri -SourceKey Tombola/AWS/BuildMeScripts/JoinDC/CreateDC.ps1 C:\\Assets\\CreateDC.ps1", "\n",
+                              "Rename-Computer -NewName \"", { "Fn::Join": ["", [ { "Ref": "Country" }, "DCC", { "Fn::FindInMap": [ "EnvironmentToCode", { "Ref": "Environment" }, "Value" ] }, "-01" ] ] },"\" -force", "\n",
+                              "Add-WindowsFeature \"RSAT-AD-Tools\"", "\n",
+                              "$password = \"", { "Ref": "LocalAdministratorPassword" }, "\"", "\n",
+                              "$localAdmin = [ADSI]\"WinNT://localhost/Administrator, user\"", "\n",
+                              "$localAdmin.psbase.Invoke(\"SetPassword\", $password)", "\n",
+                              "$localAdminCred = New-Object System.Management.Automation.PSCredential(\"administrator\", (ConvertTo-SecureString \"$password\" -AsPlainText -Force))", "\n",
+                              "$jobTrigger = New-JobTrigger -AtStartup -RandomDelay 00:00:30", "\n",
+                              "$jobOption = New-ScheduledJobOption  -MultipleInstancePolicy StopExisting -RunElevated", "\n",
+                              "Register-ScheduledJob -Trigger $jobTrigger -ScheduledJobOption $jobOption -Credential $localAdminCred -ScriptBlock { C:\\Assets\\CreateDC.ps1 \"", { "Fn::Join": ["", [ "AWS", { "Ref": "Environment" }, ".NET" ] ] } ,"\" \"", { "Fn::Join": ["", [ "AWS", { "Ref": "Environment" } ] ] }, "\" \"", { "Ref": "DC1PrivateIP" } , "\" \"", { "Ref": "DC2PrivateIP" }, "\" \"", { "Ref": "WaitForPrimaryDCWaitHandle" } , "\" >> \"C:\\Assets\\DCBuild.log\" } -Name CompleteBuildDC", "\n",
+                              "Restart-Computer -Force", "\n",
+                              "</powershell>", "\n"
+                            ]
+                        ]
+                    }
+                },
+                "Tags": [
+                    { "Key": "Name", "Value" : { "Fn::Join": ["", [ { "Ref": "Country" }, "DCC", { "Fn::FindInMap": [ "EnvironmentToCode", { "Ref": "Environment" }, "Value" ] }, "-01" ] ] } },
+                    { "Key": "Team", "Value" : "Infra"},
+                    { "Key": "Role", "Value" : "DC"},
+                    { "Key": "Country", "Value" : { "Ref": "Country" } },
+                    { "Key": "Environment", "Value" : { "Ref": "Environment" } },
+                    { "Key": "AMI", "Value": { "Ref": "AMI" } }
+                ]
+            }
+        },
+        "DC2": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+              "KeyName": {
+                  "Ref": "KeyName"
+              },
+              "ImageId": {
+                "Ref": "AMI"
+              },
+              "InstanceType": {
+                  "Ref": "InstanceType"
+              },
+              "NetworkInterfaces": [
+                  {
+                      "DeviceIndex": "0",
+                      "DeleteOnTermination": "true",
+                      "SubnetId": {
+                          "Ref": "Subnet2"
+                      },
+                      "PrivateIpAddress": {  "Fn::If": [ "DC2UnspecifiedPrivateIP", { "Ref" : "AWS::NoValue" }, { "Ref": "DC2PrivateIP" } ] },
+                      "GroupSet":  { "Ref" : "SecurityGroups" }
+                  }
+              ],
+              "IamInstanceProfile": "Software",
+              "UserData": {
+                  "Fn::Base64": {
+                      "Fn::Join": [
+                          "",
+                          [
+                            "# Version: 1.0\n",
+                            "<powershell>Set-ExecutionPolicy \"remotesigned\" -force", "\n",
+                            "Import-Module \"C:\\Program Files (x86)\\AWS Tools\\PowerShell\\AWSPowerShell\\AWSPowerShell.psd1\"", "\n",
+                            "Initialize-AWSDefaults -Region eu-central-1", "\n",
+                            "if((Test-Path \"C:\\Assets\") -ne $true) {", "\n",
+                            "   New-Item -Path \"C:\\Assets\" -ItemType \"directory\"", "\n",
+                            "}", "\n",
+                            "Copy-S3Object -Region eu-west-1 -SourceBucket tom-filerepo-pri -SourceKey Tombola/AWS/BuildMeScripts/JoinDC/JoinDC.ps1 C:\\Assets\\JoinDC.ps1", "\n",
+                            "Rename-Computer -NewName \"", { "Fn::Join": ["", [ { "Ref": "Country" }, "DCC", { "Fn::FindInMap": [ "EnvironmentToCode", { "Ref": "Environment" }, "Value" ] }, "-02" ] ] },"\" -force", "\n",
+                            "Add-WindowsFeature \"RSAT-AD-Tools\"", "\n",
+                            "$password = \"", { "Ref": "LocalAdministratorPassword" }, "\"", "\n",
+                            "$localAdmin = [ADSI]\"WinNT://localhost/Administrator, user\"", "\n",
+                            "$localAdmin.psbase.Invoke(\"SetPassword\", $password)", "\n",
+                            "$localAdminCred = New-Object System.Management.Automation.PSCredential(\"administrator\", (ConvertTo-SecureString \"$password\" -AsPlainText -Force))", "\n",
+                            "$jobTrigger = New-JobTrigger -AtStartup -RandomDelay 00:00:30", "\n",
+                            "$jobOption = New-ScheduledJobOption  -MultipleInstancePolicy StopExisting -RunElevated", "\n",
+                            "Register-ScheduledJob -Trigger $jobTrigger -ScheduledJobOption $jobOption -Credential $localAdminCred -ScriptBlock { C:\\Assets\\JoinDC.ps1 \"", { "Fn::Join": ["", [ "AWS", { "Ref": "Environment" }, ".NET" ] ] } ,"\" \"", { "Fn::Join": ["", [ "AWS", { "Ref": "Environment" } ] ] }, "\" \"", { "Ref": "DC2PrivateIP" } , "\" \"", { "Ref": "DC1PrivateIP" }, "\" \"", { "Ref": "LocalAdministratorPassword" }, "\" >> \"C:\\Assets\\DCJoin.log\" } -Name CompleteBuildDC", "\n",
+                            "Restart-Computer -Force", "\n",
+                            "</powershell>", "\n"
+                          ]
+                      ]
+                  }
+              },
+              "Tags": [
+                    { "Key": "Name", "Value" : { "Fn::Join": ["", [ { "Ref": "Country" }, "DCC", { "Fn::FindInMap": [ "EnvironmentToCode", { "Ref": "Environment" }, "Value" ] }, "-02" ] ] } },
+                    { "Key": "Team", "Value" : "Infra"},
+                    { "Key": "Role", "Value" : "DC"},
+                    { "Key": "Country", "Value" : { "Ref": "Country" } },
+                    { "Key": "Environment", "Value" : { "Ref": "Environment" } },
+                    { "Key": "AMI", "Value": { "Ref": "AMI" } }
+                ]
+            },
+            "DependsOn": "WaitForPrimaryDC"
+        },
+        "WaitForPrimaryDCWaitHandle": {
+            "Type": "AWS::CloudFormation::WaitConditionHandle",
+            "Properties": {}
+        },
+        "WaitForPrimaryDC": {
+            "Type": "AWS::CloudFormation::WaitCondition",
+            "DependsOn": "DC1",
+            "Properties": {
+                "Handle": {
+                    "Ref": "WaitForPrimaryDCWaitHandle"
+                },
+                "Timeout": "1200"
+            }
+        }
+    },
+    "Outputs": {
+        "DC1": { "Value": { "Ref": "DC1"} },
+        "DC2": { "Value": { "Ref": "DC2"} }
+    }
+}
