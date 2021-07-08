@@ -23,7 +23,7 @@ Parameters:
   AMIId: 
     Description: AMI for webserver 
     Type: String
-    Default: ami-0abe07527ecfe1c07
+    Default: aami-0a75a0fadc3eb64e7
 
   SSHLocation:
     Description: The IP address range that can be used to SSH to the EC2 instances
