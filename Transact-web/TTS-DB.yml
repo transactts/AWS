@@ -1,0 +1,87 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: This template deploys DB for TTS-Web
+
+Parameters:
+  VPC:
+    Description: VPC ID of your existing Virtual Private Cloud (VPC) where you want to deploy transact stack.
+    Type: AWS::EC2::VPC::Id
+
+  VPCCIDR:
+    Description: The CIDR block for VPC
+    Type: String
+    Default: 10.0.0.0/16
+
+  PrivateSubnet1:
+    Description: Private Subnet1
+    Type: AWS::EC2::Subnet::Id
+
+  PrivateSubnet2:
+    Description: Private Subnet2
+    Type: AWS::EC2::Subnet::Id
+
+  PublicSubnet1:
+    Description: Public Subnet1
+    Type: AWS::EC2::Subnet::Id
+  
+  PublicSubnet2:
+    Description: Public Subnet2
+    Type: AWS::EC2::Subnet::Id
+
+  MyDBName:
+    Description: The name of the database
+    Type: String
+    Default: TransactWeb
+
+  MyDBPassword:
+    Description: The password for the database
+    Type: String
+    Default: Transactts2021
+     
+  MyDBUsername:
+    Description: The username of the database
+    Type: String
+    Default: TTSWUser
+
+  Storage:
+    Description: Storage size of MySQL Instance
+    Type: Number
+
+Resources:
+  DBinstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllocatedStorage: !Ref Storage
+      DBInstanceClass: db.t2.small
+      DBName:
+        Ref: MyDBName
+      VPCSecurityGroups:
+      - Ref: DBVPCSecurityGroup
+      DBSubnetGroupName:
+        Ref: myDBSubnetGroup
+      Engine: MySQL
+      MasterUserPassword:
+        Ref: MyDBPassword
+      MasterUsername:
+        Ref: MyDBUsername
+      MultiAZ: true
+  DBVPCSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: Security Group for RDS Instance
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 3306
+        ToPort: 3306
+  myDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: DB Subnet Group
+      SubnetIds:
+      - Ref: PrivateSubnet1
+      - Ref: PrivateSubnet2
+
+Outputs:
+  DBinstance:
+    Description: A reference to the created DBinstance
+    Value: !Ref DBinstance
