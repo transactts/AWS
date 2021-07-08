@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: This template deploys Elasticache for TTS-Web
+
+Parameters:
+  VPC:
+    Description: VPC ID of your existing Virtual Private Cloud (VPC) where you want to deploy transact stack.
+    Type: AWS::EC2::VPC::Id
+
+  VPCCIDR:
+    Description: The CIDR block for VPC
+    Type: String
+    Default: 10.0.0.0/16
+
+  PrivateSubnet1:
+    Description: Private Subnet1
+    Type: AWS::EC2::Subnet::Id
+
+  PrivateSubnet2:
+    Description: Private Subnet2
+    Type: AWS::EC2::Subnet::Id
+
+Resources:
+  ElastiCacheSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Database Security Group
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 11211
+        ToPort: 11211
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+  ElasticacheCluster:
+    Type: 'AWS::ElastiCache::CacheCluster'
+    Properties:    
+      AZMode: cross-az
+      Engine: memcached
+      PreferredAvailabilityZones:
+        - eu-west-1a
+        - eu-west-1b
+      CacheSubnetGroupName: !Ref SubnetGroup
+      CacheNodeType: cache.t2.micro
+      NumCacheNodes: 2
+      VpcSecurityGroupIds:
+      - !GetAtt ElastiCacheSecurityGroup.GroupId
+  SubnetGroup:
+    Type: 'AWS::ElastiCache::SubnetGroup'
+    Properties:
+      Description: Cache Subnet Group
+      SubnetIds:
+      - !Ref PrivateSubnet1
+      - !Ref PrivateSubnet2
+
+Outputs:
+  ElasticacheCluster:
+    Description: A reference to the created ElasticacheCluster
+    Value: !Ref ElasticacheCluster

@@ -1,0 +1,107 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: This template deploys Instances for TTS-Web
+
+Parameters:
+  VPC:
+    Description: VPC ID of your existing Virtual Private Cloud (VPC) where you want to deploy transact stack.
+    Type: AWS::EC2::VPC::Id
+
+  VPCCIDR:
+    Description: The CIDR block for VPC
+    Type: String
+    Default: 10.0.0.0/16
+
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+
+  InstanceType:
+    Description: WebServer EC2 instance type
+    Type: String
+    Default: t2.micro
+
+  AMIId: 
+    Description: AMI for webserver 
+    Type: String
+    Default: ami-0abe07527ecfe1c07
+
+  SSHLocation:
+    Description: The IP address range that can be used to SSH to the EC2 instances
+    Type: String
+    Default: 0.0.0.0/0
+
+  PublicSubnet1:
+    Description: Public Subnet1
+    Type: AWS::EC2::Subnet::Id
+  
+  PublicSubnet2:
+    Description: Public Subnet2
+    Type: AWS::EC2::Subnet::Id
+
+Resources:
+  WebServerInstance1:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: !Ref InstanceType
+      SubnetId: !Ref PublicSubnet1
+      ImageId: !Ref AMIId
+      AvailabilityZone: !Select [ 0, !GetAZs  '' ]
+      SecurityGroupIds:
+          - !GetAtt WebServerSecurityGroup.GroupId
+      KeyName: !Ref KeyName
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: Enable HTTP/S access via port 80/443
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHLocation
+
+  WebServerInstance2:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: !Ref InstanceType
+      SubnetId: !Ref PublicSubnet2
+      ImageId: !Ref AMIId
+      AvailabilityZone: !Select [ 1, !GetAZs  '' ]
+      SecurityGroupIds:
+          - !GetAtt WebServerSecurityGroup.GroupId
+      KeyName: !Ref KeyName
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: Enable HTTP/S access via port 80/443
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHLocation
+
+Outputs:
+  WebServerInstance1:
+    Description: A reference to the created WebServerInstance1
+    Value: !Ref WebServerInstance1
+
+  WebServerInstance2:
+    Description: A reference to the created WebServerInstance2
+    Value: !Ref WebServerInstance2
