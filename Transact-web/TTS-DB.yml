@@ -30,17 +30,14 @@ Parameters:
   MyDBName:
     Description: The name of the database
     Type: String
-    Default:
 
   MyDBPassword:
     Description: The password for the database
     Type: String
-    Default:
      
   MyDBUsername:
     Description: The username of the database
     Type: String
-    Default:
 
   Storage:
     Description: Storage size of MySQL Instance
