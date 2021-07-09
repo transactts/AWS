@@ -32,9 +32,9 @@ Parameters:
     Description: Public Subnet2
     Type: AWS::EC2::Subnet::Id
 
-  #SSLCertificateARN:
-    #Description: Provide ARN of the SSL certificate imported in AWS Certificate Manager.
-    #Type: String
+  SSLCertificateARN:
+    Description: Provide ARN of the SSL certificate imported in AWS Certificate Manager.
+    Type: AWS::CertificateManager::Certificate
 
   ELBScheme:
     Description: Choose load balancer scheme. Default is 'internet-facing'.
@@ -101,9 +101,9 @@ Resources:
         Type: fixed-response
       LoadBalancerArn:
         Ref: ApplicationLoadBalancer
-      #Certificates:
-      #- CertificateArn:
-          #Ref: SSLCertificateARN
+      Certificates:
+      - CertificateArn:
+          Ref: SSLCertificateARN
       Port: 443
       Protocol: HTTPS
       SslPolicy: ELBSecurityPolicy-2016-08
