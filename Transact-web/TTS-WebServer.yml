@@ -18,12 +18,12 @@ Parameters:
   InstanceType:
     Description: WebServer EC2 instance type
     Type: String
-    Default: t2.micro
+    Default: t2.medium
 
   AMIId: 
     Description: AMI for webserver 
     Type: String
-    Default: aami-0a75a0fadc3eb64e7
+    Default: ami-0a75a0fadc3eb64e7
 
   SSHLocation:
     Description: The IP address range that can be used to SSH to the EC2 instances
@@ -78,24 +78,6 @@ Resources:
       SecurityGroupIds:
           - !GetAtt WebServerSecurityGroup.GroupId
       KeyName: !Ref KeyName
-  WebServerSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      VpcId: !Ref VPC
-      GroupDescription: Enable HTTP/S access via port 80/443
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !Ref SSHLocation
 
 Outputs:
   WebServerInstance1:
